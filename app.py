@@ -1,57 +1,74 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime
+from supabase import create_client, Client
+import os
 
 # ------------------------------
-# CONFIG
+# 1️⃣ CONFIGURATION STREAMLIT
 # ------------------------------
-st.set_page_config(page_title="Coach Trail - Test", page_icon="🏃‍♂️")
-st.title("🏔️ Ton Coach Trail (version test)")
+st.set_page_config(page_title="Coach Trail", page_icon="🏃‍♂️", layout="wide")
+st.title("🏔️ Mon Coach Trail")
 
 # ------------------------------
-# FORMULAIRE UTILISATEUR
+# 2️⃣ CONNEXION À SUPABASE
 # ------------------------------
-st.header("📝 Paramètres de ta course")
+# ⚠️ Ces infos NE DOIVENT PAS être écrites en clair ici.
+# Tu les stockeras plus tard dans Streamlit Cloud > Settings > Secrets.
+# Exemple de ce que tu mettras là-bas :
+# SUPABASE_URL="https://xxxxx.supabase.co"
+# SUPABASE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI..."
 
-with st.form("course_form"):
-    distance = st.number_input("Distance du trail (km)", min_value=5, max_value=200, value=30)
-    denivele = st.number_input("Dénivelé positif (m)", min_value=0, max_value=10000, value=1000)
-    date_trail = st.date_input("Date de ton trail", min_value=datetime.today())
-    jours_dispo = st.multiselect(
-        "Jours disponibles pour t'entraîner",
-        ["Lundi","Mardi","Mercredi","Jeudi","Vendredi","Samedi","Dimanche"],
-        default=["Mardi","Jeudi","Samedi"]
-    )
-    contraintes = st.text_area("Autres contraintes ou préférences (facultatif)", placeholder="Ex : pas d'entraînement le lundi soir")
-    submitted = st.form_submit_button("Créer mon planning")
+url = os.getenv("SUPABASE_URL")
+key = os.getenv("SUPABASE_KEY")
+
+if url and key:
+    supabase: Client = create_client(url, key)
+else:
+    st.warning("🔐 Supabase non connecté — ajoute tes clés dans les secrets Streamlit.")
 
 # ------------------------------
-# SIMULATION DU PLANNING
+# 3️⃣ PAGE DE PROFIL
 # ------------------------------
-if submitted:
-    st.info("Ton coach réfléchit... ⏳")
+st.sidebar.header("Navigation")
+page = st.sidebar.radio("Aller à :", ["Profil", "Calendrier"])
 
-    # On crée un planning fictif
-    dates = [datetime.today() + timedelta(days=i) for i in range(7)]
-    types_seance = ["Footing", "Fractionné", "Sortie longue", "Récup", "Footing", "Fractionné", "Récup"]
-    durees = [30, 45, 90, 20, 35, 50, 25]
+if page == "Profil":
+    st.header("👤 Mon Profil")
 
-    df = pd.DataFrame({
-        "Date": [d.strftime("%d/%m/%Y") for d in dates],
-        "Type": types_seance,
-        "Durée (min)": durees
+    name = st.text_input("Nom")
+    workload = st.slider("Charge de travail actuelle (1 = faible / 10 = très élevée)", 1, 10, 5)
+    next_goal = st.text_input("Prochain objectif de l’année (ex: Trail des Alpes 25km)")
+
+    if st.button("💾 Enregistrer mes infos"):
+        if url and key:
+            data = {"name": name, "workload": workload, "next_goal": next_goal}
+            supabase.table("users").insert(data).execute()
+            st.success("✅ Profil enregistré dans Supabase !")
+        else:
+            st.info("Simulation : Données enregistrées localement.")
+            st.write({"name": name, "workload": workload, "next_goal": next_goal})
+
+# ------------------------------
+# 4️⃣ PAGE CALENDRIER
+# ------------------------------
+elif page == "Calendrier":
+    st.header("📅 Mon Calendrier d'entraînement")
+
+    # (Version simple : calendrier simulé)
+    date = st.date_input("Date de la séance")
+    title = st.text_input("Nom de la séance (ex: Sortie longue)")
+    duration = st.number_input("Durée (minutes)", min_value=10, max_value=300, value=60)
+    color = st.color_picker("Couleur de la séance", "#00b4d8")
+
+    if st.button("Ajouter cette séance"):
+        st.success(f"✅ Séance ajoutée : {title} ({duration} min le {date})")
+
+    # Affichage d’exemple d’un mini tableau (plus tard → calendrier interactif)
+    sample = pd.DataFrame({
+        "Date": [datetime.today().date()],
+        "Séance": ["Footing"],
+        "Durée (min)": [45],
+        "Couleur": ["#00b4d8"]
     })
-
-    # Code couleur pour le type de séance
-    colors = {
-        "Footing": "#a8dadc",
-        "Fractionné": "#f4a261",
-        "Sortie longue": "#2a9d8f",
-        "Récup": "#e9c46a"
-    }
-
-    def color_row(row):
-        return [f'background-color: {colors.get(row["Type"], "#ffffff")}' for _ in row]
-
-    st.header("📅 Ton planning personnalisé (simulation)")
-    st.dataframe(df.style.apply(color_row, axis=1))
+    st.dataframe(sample)
